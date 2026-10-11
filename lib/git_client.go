@@ -78,7 +78,7 @@ func (c *RealGitClient) GetGitFiles(dir string) ([]string, error) {
 		return nil, fmt.Errorf("git not available")
 	}
 
-	cmd := exec.Command("git", "-C", dir, "ls-files", "--cached", "--others", "--exclude-standard")
+	cmd := exec.Command("git", "-C", dir, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 128 {
@@ -87,11 +87,12 @@ func (c *RealGitClient) GetGitFiles(dir string) ([]string, error) {
 		return nil, fmt.Errorf("error running git ls-files: %v", err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	// NUL delimiters preserve filename bytes without Git's quoting or whitespace trimming.
+	names := strings.Split(string(output), "\x00")
 	var files []string
-	for _, line := range lines {
-		if line != "" {
-			files = append(files, filepath.Join(dir, line))
+	for _, name := range names {
+		if name != "" {
+			files = append(files, filepath.Join(dir, name))
 		}
 	}
 	return files, nil
