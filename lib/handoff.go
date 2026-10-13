@@ -478,7 +478,6 @@ func processFile(filePath string, logger *Logger, config *Config, processor Proc
 	return processor(filePath, content)
 }
 
-
 // processPaths processes multiple file or directory paths according to the configuration.
 // It creates a customized processor function that tracks progress and formats output
 // using the config's Format template. The function first discovers all files to process
@@ -685,7 +684,8 @@ func ProcessProject(paths []string, config *Config) (string, Stats, error) {
 // Parent directories are automatically created if they don't exist.
 //
 // By default, it will not overwrite existing files unless overwrite is set to true.
-// If the file exists and overwrite is false, it returns ErrFileExists.
+// If the output path exists (including a symlink) and overwrite is false, it returns
+// ErrFileExists. Creation is exclusive so concurrent writers cannot overwrite it.
 //
 // Parameters:
 //   - content: The content to write to the file
@@ -696,28 +696,34 @@ func ProcessProject(paths []string, config *Config) (string, Stats, error) {
 //   - An error if the file cannot be written (e.g., due to directory creation failure,
 //     permissions issues, file already exists with overwrite=false, or other I/O errors)
 func WriteToFile(content, filePath string, overwrite bool) error {
-	// Check if file exists and handle overwrite flag
-	if !overwrite {
-		_, err := os.Stat(filePath)
-		if err == nil {
-			// File exists and overwrite is false, return error
-			return fmt.Errorf("%w: %s", ErrFileExists, filePath)
-		} else if !os.IsNotExist(err) {
-			// Some other error occurred
-			return fmt.Errorf("failed to check if file %q exists: %w", filePath, err)
-		}
-		// File doesn't exist, proceed with creation
-	}
-
 	// Create parent directories if they don't exist
 	dirPath := filepath.Dir(filePath)
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return fmt.Errorf("failed to create parent directories for %q: %w", filePath, err)
 	}
 
-	// Write the file
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to write to file %q: %w", filePath, err)
+	// Enforce overwrite protection when opening, without a check-then-write race.
+	flags := os.O_WRONLY | os.O_CREATE
+	if overwrite {
+		flags |= os.O_TRUNC
+	} else {
+		flags |= os.O_EXCL
+	}
+	file, err := os.OpenFile(filePath, flags, 0644)
+	if err != nil {
+		if !overwrite && errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("%w: %s", ErrFileExists, filePath)
+		}
+		return fmt.Errorf("failed to open file %q: %w", filePath, err)
+	}
+
+	_, writeErr := file.WriteString(content)
+	closeErr := file.Close()
+	if writeErr != nil {
+		return fmt.Errorf("failed to write to file %q: %w", filePath, writeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("failed to close file %q: %w", filePath, closeErr)
 	}
 	return nil
 }
