@@ -215,6 +215,7 @@ When multiple output options are specified, Handoff follows this precedence:
 
 When using the `-output` flag, Handoff includes built-in protection against accidental file overwrites:
 - If the specified output file already exists, Handoff will refuse to overwrite it
+- This protection includes existing symlinks and concurrent writes to the same output path
 - To allow overwriting an existing file, use the `-force` flag
 - This ensures you don't accidentally lose content in existing files
 
