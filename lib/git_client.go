@@ -53,7 +53,7 @@ func (c *RealGitClient) IsGitIgnored(file string) bool {
 
 	dir := filepath.Dir(file)
 	filename := filepath.Base(file)
-	cmd := exec.Command("git", "-C", dir, "check-ignore", "-q", filename)
+	cmd := exec.Command("git", "-C", dir, "check-ignore", "-q", "--", filename)
 	err := cmd.Run()
 
 	if err == nil {
