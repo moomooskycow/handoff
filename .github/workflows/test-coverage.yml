@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     name: Test with Coverage
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hetzner-ci, handoff-ci]
     steps:
       - name: Set up Go
         uses: actions/setup-go@v5
